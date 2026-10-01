@@ -1,0 +1,80 @@
+[tool.poetry]
+name = "model-inference-service"
+version = "3.0.0"
+description = "Model Inference Service"
+authors = ["XYZ <xyz@company.com>"]
+readme = "README.md"
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.111.0"
+uvicorn = { extras = ["standard"], version = "^0.30.0" }
+pydantic = "^2.7.0"
+pydantic-settings = "^2.3.0"
+redis = "^5.0.1"
+prometheus-client = "^0.20.0"
+python-json-logger = "^2.0.7"
+httpx = "^0.27.0"
+opentelemetry-api = "^1.22.0"
+opentelemetry-sdk = "^1.22.0"
+opentelemetry-instrumentation-fastapi = ">=0.43b0"
+opentelemetry-exporter-otlp-proto-http = "^1.22.0"
+grpcio = ">=1.63.0,<1.68"
+grpcio-reflection = ">=1.63.0,<1.68"
+tritonclient = {extras = ["grpc"], version = "^2.64.0"}
+jellyfish = "^1.0.3"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.0"
+pytest-cov = "^5.0.0"
+ruff = "^0.4.0"
+mypy = "^1.10.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests", "src/tests"]
+addopts = "-v --cov=src --cov-report=term-missing --cov-fail-under=70"
+
+[tool.coverage.run]
+omit = [
+    "src/main.py",
+    "src/config/*",
+    "src/auth/*",
+    "src/adapters/triton_client.py",
+    "src/adapters/feature_store_client.py",
+    "src/adapters/mlflow_client.py",
+    "src/adapters/redis_client.py",
+    "src/adapters/circuit_breaker.py",
+    "src/adapters/exceptions.py",
+    "src/api/v1/dependencies.py",
+    "src/api/v1/routes.py",
+    "src/api/schemas/common.py",
+    "src/api/schemas/requests.py",
+    "src/api/schemas/responses.py",
+    "src/domain/enums.py",
+    "src/domain/exceptions.py",
+    "src/services/monitoring.py",
+    "src/services/feature_adapter.py",
+    "src/services/mlflow_adapter.py",
+    "src/services/model_manager.py",
+    "src/infrastructure/cache.py",
+    "src/infrastructure/errors.py",
+    "src/infrastructure/observability.py",
+    "src/tests/*",
+    "src/grpc/inference_pb2.py",
+    "src/grpc/inference_pb2_grpc.py",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

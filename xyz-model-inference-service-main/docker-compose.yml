@@ -1,0 +1,128 @@
+# docker-compose.yml - Local Development
+
+version: '3.8'
+
+services:
+  # Triton Inference Server (GPU-enabled)
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    container_name: triton-inference
+    ports:
+      - "8000:8000"    # HTTP
+      - "8001:8001"    # gRPC
+      - "8002:8002"    # Metrics
+    volumes:
+      - ./models:/models:ro
+    environment:
+      - LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      tritonserver
+      --model-repository=/models
+      --log-verbose=true
+      --metrics-port=8002
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # MLflow Model Registry
+  mlflow:
+    image: python:3.11-slim
+    container_name: mlflow-registry
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=sqlite:////mlflow/mlflow.db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    command: >
+      bash -c "
+      pip install mlflow &&
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Feast Feature Store UI
+  feast:
+    image: feastdev/feast:latest
+    container_name: feast-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - FEAST_REGISTRY=/feast/registry.pb
+      - FEAST_ONLINE_STORE=/feast/online_store.db
+    volumes:
+      - feast_data:/feast
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Model Inference Service (local development)
+  inference-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: model-inference-service
+    ports:
+      - "8001:8000"
+    environment:
+      - ENVIRONMENT=development
+      - TRITON_HOST=triton
+      - TRITON_PORT=8000
+      - TRITON_GRPC_PORT=8001
+      - TRITON_TIMEOUT_MS=200
+      - FEATURE_STORE_URL=http://feast:8080
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=INFO
+    depends_on:
+      triton:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis_data:
+  mlflow_data:
+  feast_data:
